@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Ex 4: Suffix Tree DNA Matching</title>
+<style>
+:root{--bg:#f7f7f5;--card:#fff;--tx:#1c1c1a;--mut:#6b6b66;--bd:#dcdcd6;--ac:#2a6fdb;--ac2:#d9622b;--ok:#1a7f4b;--bad:#c0392b;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#171717;--card:#222221;--tx:#ececE8;--mut:#9a9a94;--bd:#3a3a37;--ac:#6aa5ff;--ac2:#f08a55;--ok:#4cc58a;--bad:#ff7b6b;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#171717;--card:#222221;--tx:#ececE8;--mut:#9a9a94;--bd:#3a3a37;--ac:#6aa5ff;--ac2:#f08a55;--ok:#4cc58a;--bad:#ff7b6b;color-scheme:dark}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--bg);color:var(--tx);font:15px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+main{max-width:960px;margin:0 auto;padding:20px 16px 48px}
+h1{font-size:22px;margin:0 0 4px}h2{font-size:16px;margin:0 0 12px}
+.sub{color:var(--mut);margin:0 0 18px}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:16px;margin-bottom:16px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px}
+label{display:block;font-size:13px;color:var(--mut)}
+input,textarea{width:100%;box-sizing:border-box;margin-top:4px;padding:8px;border:1px solid var(--bd);border-radius:8px;background:var(--bg);color:var(--tx);font:inherit}
+textarea{font:13px/1.4 ui-monospace,Menlo,Consolas,monospace;resize:vertical}
+button{background:var(--ac);color:#fff;border:0;border-radius:8px;padding:9px 16px;font:inherit;font-weight:600;cursor:pointer}
+button.sec{background:transparent;color:var(--ac);border:1px solid var(--ac)}
+button:disabled{opacity:.6}
+.row{display:flex;gap:10px;flex-wrap:wrap;margin-top:14px;align-items:center}
+.scroll{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:14px}
+th,td{padding:7px 10px;border-bottom:1px solid var(--bd);text-align:right;white-space:nowrap}
+th:first-child,td:first-child{text-align:left}
+th{color:var(--mut);font-weight:600}
+pre{margin:0;font:13px/1.5 ui-monospace,Menlo,Consolas,monospace;white-space:pre-wrap;word-break:break-all}
+.out{background:var(--bg);border:1px solid var(--bd);border-radius:8px;padding:10px;overflow-x:auto;margin-top:12px}
+.charts{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px}
+svg text{fill:var(--tx);font-size:11px}svg .m{fill:var(--mut)}
+.note{color:var(--mut);font-size:13px;margin:8px 0 0}
+.ok{color:var(--ok);font-weight:600}.bad{color:var(--bad);font-weight:600}
+</style>
+</head>
+<body>
+<main>
+<h1>Experiment 4: Suffix Tree for DNA Sequence Matching</h1>
+<p class="sub">Ukkonen’s linear-time suffix tree over {A, C, G, T}: find all motif occurrences and the longest repeated substring, then measure how build and query time scale.</p>
+
+<div class="card">
+<h2>1. Motif search on your genome</h2>
+<label>Genome sequence (A, C, G, T only; other characters are ignored)
+<textarea id="genome" rows="3">ATGCGATACGCTTGAGGCTATGCGATACG</textarea></label>
+<div class="grid" style="margin-top:12px">
+<label>Motifs (comma or space separated)<input id="motifs" value="ATGCG, GATAC, TTGA, CCCC"></label>
+<label>Or generate random genome: length<input id="gl" type="number" min="10" max="500000" value="1000"></label>
+<label>Seed<input id="gs" type="number" value="3"></label>
+</div>
+<div class="row"><button id="bSearch">Build tree &amp; search</button><button class="sec" id="bGen">Generate random genome</button></div>
+<div class="out"><pre id="sOut">Press “Build tree &amp; search”.</pre></div>
+</div>
+
+<div class="card">
+<h2>2. Scalability experiment</h2>
+<div class="grid">
+<label>Genome lengths (comma separated)<input id="lens" value="10000, 50000, 200000"></label>
+<label>Number of motifs<input id="nm" type="number" min="1" max="1000" value="100"></label>
+<label>Motif length<input id="ml" type="number" min="2" max="100" value="12"></label>
+<label>Random seed<input id="seed" type="number" value="3"></label>
+</div>
+<div class="row"><button id="bRun">Run experiment</button><span id="busy" class="note" style="display:none">Running…</span></div>
+<p class="note">Motifs are sampled from the genome, so each is guaranteed to occur at least once. Tree results are checked against a naive scan.</p>
+</div>
+
+<div id="results" style="display:none">
+<div class="card">
+<h2>Timing results</h2>
+<div class="scroll"><table id="tbl"></table></div>
+<p id="verdict" class="note"></p>
+</div>
+<div class="card">
+<h2>Graphical analysis</h2>
+<div class="charts">
+<div><svg id="c1" viewBox="0 0 400 270" width="100%" role="img" aria-label="Build time versus genome length"></svg></div>
+<div><svg id="c2" viewBox="0 0 400 270" width="100%" role="img" aria-label="Query time versus genome length, log scale"></svg></div>
+</div>
+</div>
+</div>
+</main>
+
+<script>
+class STNode{constructor(s,e){this.children=new Map();this.start=s;this.end=e;this.link=null;this.idx=-1}}
+class SuffixTree{
+  constructor(text){
+    this.t=text+'$';this.n=this.t.length;this.leafEnd={v:-1};
+    this.root=new STNode(-1,{v:-1});this.root.link=this.root;
+    this._build();this._label();
+  }
+  _len(nd){return nd.end.v-nd.start+1}
+  _build(){
+    const t=this.t,root=this.root;
+    let an=root,ae=-1,al=0,rem=0;
+    for(let i=0;i<this.n;i++){
+      this.leafEnd.v=i;rem++;let last=null;
+      while(rem>0){
+        if(al===0)ae=i;
+        const c=t[ae];
+        if(!an.children.has(c)){
+          an.children.set(c,new STNode(i,this.leafEnd));
+          if(last){last.link=an;last=null}
+        }else{
+          const nxt=an.children.get(c),el=this._len(nxt);
+          if(al>=el){ae+=el;al-=el;an=nxt;continue}
+          if(t[nxt.start+al]===t[i]){
+            if(last&&an!==root){last.link=an;last=null}
+            al++;break;
+          }
+          const sp=new STNode(nxt.start,{v:nxt.start+al-1});
+          an.children.set(c,sp);
+          sp.children.set(t[i],new STNode(i,this.leafEnd));
+          nxt.start+=al;
+          sp.children.set(t[nxt.start],nxt);
+          sp.link=root;
+          if(last)last.link=sp;
+          last=sp;
+        }
+        rem--;
+        if(an===root&&al>0){al--;ae=i-rem+1}
+        else if(an!==root){an=an.link}
+      }
+    }
+  }
+  _label(){
+    const st=[[this.root,0]];
+    while(st.length){const [nd,d]=st.pop();if(!nd.children.size)nd.idx=this.n-d;
+      for(const ch of nd.children.values())st.push([ch,d+this._len(ch)])}
+  }
+  findAll(pat){
+    let nd=this.root,i=0;
+    while(i<pat.length){
+      const ch=nd.children.get(pat[i]);if(!ch)return[];
+      let j=ch.start;
+      while(j<=ch.end.v&&i<pat.length){if(this.t[j]!==pat[i])return[];i++;j++}
+      nd=ch;
+    }
+    const res=[],st=[nd];
+    while(st.length){const x=st.pop();if(!x.children.size)res.push(x.idx);for(const c of x.children.values())st.push(c)}
+    return res.sort((a,b)=>a-b);
+  }
+  longestRepeat(){
+    let bd=0,bs=0;const st=[[this.root,0]];
+    while(st.length){
+      const [nd,d]=st.pop();
+      if(nd.children.size&&d>bd&&nd!==this.root){bd=d;bs=nd.end.v-d+1}
+      for(const ch of nd.children.values())if(ch.children.size)st.push([ch,d+this._len(ch)]);
+    }
+    return this.t.substr(bs,bd);
+  }
+}
+function naiveFind(text,pat){const r=[];for(let i=0;i<=text.length-pat.length;i++)if(text.startsWith(pat,i))r.push(i);return r}
+function rng(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
+function randGenome(L,seed){const r=rng(seed),b='ACGT';let s=[];for(let i=0;i<L;i++)s.push(b[Math.floor(r()*4)]);return s.join('')}
+const $=id=>document.getElementById(id);
+const fmt=x=>Number(x).toLocaleString('en-US');
+const clean=s=>s.toUpperCase().replace(/[^ACGT]/g,'');
+
+$('bGen').onclick=()=>{
+  const L=Math.min(500000,Math.max(10,parseInt($('gl').value)||1000));
+  $('genome').value=randGenome(L,parseInt($('gs').value)||0);
+};
+$('bSearch').onclick=()=>{
+  const g=clean($('genome').value);
+  if(g.length<2){$('sOut').textContent='Enter a genome of at least 2 bases (A, C, G, T).';return}
+  const ms=$('motifs').value.split(/[\s,]+/).map(clean).filter(Boolean);
+  const t0=performance.now();const tree=new SuffixTree(g);const tb=performance.now()-t0;
+  const show=g.length>120?g.slice(0,120)+'… ('+fmt(g.length)+' bases)':g;
+  let o='Genome : '+show+'\nSuffix tree built in '+tb.toFixed(2)+' ms\n\n';
+  let allOk=true;
+  for(const m of ms){
+    const p=tree.findAll(m),nv=naiveFind(g,m);
+    if(JSON.stringify(p)!==JSON.stringify(nv))allOk=false;
+    const ps=p.length>20?p.slice(0,20).join(', ')+', … ('+p.length+' total)':p.join(', ');
+    o+='Motif '+m.padEnd(8)+'-> positions ['+ps+']\n';
+  }
+  const lr=tree.longestRepeat();
+  o+='\nLongest repeated substring: '+(lr||'(none)');
+  if(lr)o+='\n  length '+lr.length+', positions ['+tree.findAll(lr).join(', ')+']';
+  o+='\n\nVerification against naive scan: '+(allOk?'all results match':'MISMATCH');
+  $('sOut').textContent=o;
+};
+
+$('bRun').onclick=()=>{
+  $('busy').style.display='inline';$('bRun').disabled=true;
+  setTimeout(()=>{try{run()}catch(e){alert('Error: '+e.message)}$('busy').style.display='none';$('bRun').disabled=false},30);
+};
+function run(){
+  const lens=$('lens').value.split(',').map(s=>parseInt(s.trim())).filter(x=>x>=50&&x<=500000);
+  if(!lens.length)throw new Error('Enter genome lengths between 50 and 500,000.');
+  const nm=Math.max(1,parseInt($('nm').value)||100),ml=Math.max(2,parseInt($('ml').value)||12);
+  const seed=parseInt($('seed').value)||0,r=rng(seed+1);
+  const rows=[];let allOk=true;
+  for(const L of lens){
+    if(ml>=L)throw new Error('Motif length must be smaller than every genome length.');
+    const g=randGenome(L,seed+L);
+    let t0=performance.now();const tree=new SuffixTree(g);const tb=performance.now()-t0;
+    const motifs=[];for(let i=0;i<nm;i++){const p=Math.floor(r()*(L-ml));motifs.push(g.substr(p,ml))}
+    t0=performance.now();const r1=motifs.map(m=>tree.findAll(m));const tq=performance.now()-t0;
+    t0=performance.now();const r2=motifs.map(m=>naiveFind(g,m));const tn=performance.now()-t0;
+    const ok=JSON.stringify(r1)===JSON.stringify(r2);if(!ok)allOk=false;
+    rows.push({L,tb,tq,tn,ok,lr:tree.longestRepeat().length});
+  }
+  let h='<tr><th>Length</th><th>Build (ms)</th><th>Query, '+nm+' motifs (ms)</th><th>Naive (ms)</th><th>Speed-up</th><th>Longest repeat</th><th>Verified</th></tr>';
+  for(const x of rows)h+=`<tr><td>${fmt(x.L)}</td><td>${x.tb.toFixed(1)}</td><td>${x.tq.toFixed(2)}</td><td>${x.tn.toFixed(1)}</td><td>${(x.tn/Math.max(x.tq,0.001)).toFixed(0)}×</td><td>${x.lr}</td><td class="${x.ok?'ok':'bad'}">${x.ok?'✓':'✗'}</td></tr>`;
+  $('tbl').innerHTML=h;
+  $('verdict').innerHTML=allOk?'<span class="ok">All suffix-tree results match the naive scan.</span> Times depend on your device and browser.':'<span class="bad">Mismatch found between suffix tree and naive scan.</span>';
+  $('results').style.display='block';
+  line($('c1'),'Construction time vs genome length',rows,[{k:'tb',name:'Suffix tree build',c:'var(--ac)'}],false,'ms');
+  line($('c2'),'Query time for '+nm+' motifs (log scale)',rows,[{k:'tq',name:'Suffix tree',c:'var(--ac)'},{k:'tn',name:'Naive scan',c:'var(--ac2)'}],true,'ms');
+}
+
+function line(svg,title,rows,series,log,unit){
+  const W=400,H=270,L=52,B=62,T=28,R=14,pw=W-L-R,ph=H-T-B;
+  const xs=rows.map(r=>r.L),xmin=Math.min(...xs),xmax=Math.max(...xs);
+  const X=v=>L+(xmax===xmin?pw/2:pw*(v-xmin)/(xmax-xmin));
+  let all=[];series.forEach(s=>rows.forEach(r=>all.push(Math.max(r[s.k],1e-3))));
+  let lo,hi,Y,ticks=[];
+  if(log){
+    lo=Math.floor(Math.log10(Math.min(...all)));hi=Math.ceil(Math.log10(Math.max(...all)));if(hi===lo)hi=lo+1;
+    Y=v=>T+ph-ph*(Math.log10(Math.max(v,1e-3))-lo)/(hi-lo);
+    for(let e=lo;e<=hi;e++)ticks.push([e,'10'+String(e).split('').map(c=>c==='-'?'⁻':'⁰¹²³⁴⁵⁶⁷⁸⁹'[+c]).join('')]);
+    ticks=ticks.map(([e,t])=>[Y(Math.pow(10,e)),t]);
+  }else{
+    hi=Math.max(...all)*1.1;Y=v=>T+ph-ph*v/hi;
+    for(let i=0;i<=4;i++){const v=hi*i/4;ticks.push([Y(v),v>=100?Math.round(v):v.toFixed(1)])}
+  }
+  let s=`<text x="${W/2}" y="16" text-anchor="middle" font-weight="600">${title}</text>`;
+  ticks.forEach(([y,t])=>s+=`<line x1="${L}" x2="${W-R}" y1="${y}" y2="${y}" stroke="var(--bd)"/><text class="m" x="${L-6}" y="${y+4}" text-anchor="end">${t}</text>`);
+  rows.forEach(r=>s+=`<text class="m" x="${X(r.L)}" y="${T+ph+14}" text-anchor="middle">${r.L>=1000?(r.L/1000)+'k':r.L}</text>`);
+  s+=`<text class="m" x="${L+pw/2}" y="${T+ph+28}" text-anchor="middle">genome length (bases)</text>`;
+  series.forEach((sr,si)=>{
+    const pts=rows.map(r=>[X(r.L),Y(r[sr.k])]);
+    s+=`<polyline fill="none" stroke="${sr.c}" stroke-width="2" points="${pts.map(p=>p.join(',')).join(' ')}"/>`;
+    pts.forEach((p,i)=>{s+=`<circle cx="${p[0]}" cy="${p[1]}" r="3.5" fill="${sr.c}"/><text x="${p[0]}" y="${p[1]-8}" text-anchor="middle">${rows[i][sr.k]>=100?Math.round(rows[i][sr.k]):rows[i][sr.k].toFixed(rows[i][sr.k]<1?2:1)}</text>`});
+    s+=`<rect x="${L+si*140}" y="${H-24}" width="10" height="10" fill="${sr.c}" rx="2"/><text x="${L+si*140+15}" y="${H-15}">${sr.name} (${unit})</text>`;
+  });
+  svg.innerHTML=s;
+}
+$('bSearch').click();
+</script>
+</body>
+</html>
